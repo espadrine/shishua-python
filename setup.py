@@ -1,8 +1,6 @@
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
-import os
-print("CWD:", os.system("find ."))
 shishua = Extension('shishuabinding',
     extra_compile_args = ['-march=native', '-g'],
     sources = ['src/binding/binding.pyx'],
