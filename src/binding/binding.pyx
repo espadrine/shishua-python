@@ -1,6 +1,8 @@
 import cython
 from libc.stdint cimport uint8_t, uint64_t
 from libc.stddef cimport size_t
+from libc.stdlib cimport malloc
+from libc.string cimport memcpy
 from secrets import randbits
 from hashlib import sha256
 
@@ -15,10 +17,6 @@ cdef extern from "shishua.h":
     cdef prng_state prng_init(uint64_t seed[4])
     cdef void prng_gen(prng_state *state, uint8_t *buf, size_t size)
 
-# FIXME: this global state is obviously not OK.
-# We must find a way to put it in the class below.
-# Right now, it causes a segfault, likely because of memory alignment.
-cdef prng_state rng_state
 cdef class SHISHUA:
     """
     SHISHUA(seed=None)
@@ -33,6 +31,7 @@ cdef class SHISHUA:
         A seed to initialize the PRNG. If None, then fresh,
         unpredictable entropy will be pulled from the OS.
     """
+    cdef prng_state* rng_state
 
     def __init__(self, seed=None):
         cdef uint64_t rawseed[4]
@@ -52,8 +51,12 @@ cdef class SHISHUA:
         elif isinstance(seed, int):
             rawseed[0] = seed
             rawseed[1] = rawseed[2] = rawseed[3] = 0
-        global rng_state
         rng_state = prng_init(rawseed)
+        cdef prng_state *rng_statep = <prng_state *>malloc(sizeof(prng_state))
+        if not rng_statep:
+            return  # malloc failed.
+        memcpy(rng_statep, &rng_state, sizeof(prng_state))
+        self.rng_state = rng_statep
 
     def random_raw(self, size=1):
         """
@@ -75,5 +78,6 @@ cdef class SHISHUA:
         # sizes that are not multiples of 128 bytes.
         bytesize = size if size % 128 == 0 else size * 128
         buf = bytearray(bytesize)
-        prng_gen(&rng_state, buf, bytesize)
+        # FIXME: this fails when requesting 1 << 10 bytes.
+        prng_gen(self.rng_state, buf, bytesize)
         return bytes(buf[:size])
