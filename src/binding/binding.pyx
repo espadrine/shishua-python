@@ -17,6 +17,8 @@ cdef extern from "shishua.h":
     cdef prng_state prng_init(uint64_t seed[4])
     cdef void prng_gen(prng_state *state, uint8_t *buf, size_t size)
 
+DEF BUFSIZE = 1 << 17
+
 cdef class SHISHUA:
     """
     SHISHUA(seed=None)
@@ -32,6 +34,8 @@ cdef class SHISHUA:
         unpredictable entropy will be pulled from the OS.
     """
     cdef prng_state rng_state
+    cdef uint8_t[BUFSIZE] _buffer
+    cdef uint64_t _buf_index
 
     def __init__(self, seed=None):
         cdef uint64_t rawseed[4]
@@ -52,6 +56,40 @@ cdef class SHISHUA:
             rawseed[0] = seed
             rawseed[1] = rawseed[2] = rawseed[3] = 0
         self.rng_state = prng_init(rawseed)
+        self._fill_buffer()
+
+    def _fill_buffer(self):
+        cdef prng_state rng_state
+        memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
+        prng_gen(&rng_state, self._buffer, BUFSIZE)
+        self._buf_index = 0
+
+    def fill(self, buffer):
+        """
+        fill(self, buffer)
+
+        Fill buffer with random bytes from the underlying BitGenerator
+
+        Parameters
+        ----------
+        buffer : bytearray
+            Buffer that gets fully rewritten with random bytes.
+        """
+        cdef prng_state rng_state
+        if len(buffer) & (128-1) == 0:
+            # The buffer is a multiple of 128:
+            # fast-path by bringing our own buffer.
+            memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
+            prng_gen(&rng_state, buffer, len(buffer))
+        else:
+            btc = len(buffer)  # Bytes to copy (what else could it mean?)
+            while btc > 0:
+                chunk_size = min(BUFSIZE - self._buf_index, btc)
+                buffer[0:chunk_size] = self._buffer[self._buf_index:self._buf_index+chunk_size]
+                self._buf_index += chunk_size
+                btc -= chunk_size
+                if self._buf_index >= BUFSIZE:
+                    self._fill_buffer()
 
     def random_raw(self, size=1):
         """
@@ -69,11 +107,6 @@ cdef class SHISHUA:
         out : bytes
             Drawn samples.
         """
-        # TODO: add buffer for perf + to address
-        # sizes that are not multiples of 128 bytes.
-        bytesize = size if size % 128 == 0 else size * 128
-        buf = bytearray(bytesize)
-        cdef prng_state rng_state
-        memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
-        prng_gen(&rng_state, buf, bytesize)
-        return bytes(buf[:size])
+        buf = bytearray(size)
+        self.fill(buf)
+        return bytes(buf)
