@@ -1,7 +1,6 @@
 import cython
 from libc.stdint cimport uint8_t, uint64_t
 from libc.stddef cimport size_t
-from libc.stdlib cimport malloc
 from libc.string cimport memcpy
 from secrets import randbits
 from hashlib import sha256
@@ -43,7 +42,8 @@ cdef class SHISHUA:
             for i in range(4):
                 rawseed[i] = randbits(64)
         elif isinstance(seed, list):
-            rawseed[:] = seed
+            for i in range(len(seed)):
+                rawseed[i] = abs(seed[i])
         elif isinstance(seed, str):
             sha = sha256()
             sha.update(seed.encode("utf-8"))
@@ -53,8 +53,10 @@ cdef class SHISHUA:
             rawseed[2] = int.from_bytes(h[ 8:12], byteorder='little')
             rawseed[3] = int.from_bytes(h[12:16], byteorder='little')
         elif isinstance(seed, int):
-            rawseed[0] = seed
+            rawseed[0] = abs(seed)
             rawseed[1] = rawseed[2] = rawseed[3] = 0
+        else:
+            raise ValueError("Invalid type for SHISHUA seed")
         self.rng_state = prng_init(rawseed)
         self._fill_buffer()
 
