@@ -42,6 +42,8 @@ cdef class SHISHUA:
             for i in range(4):
                 rawseed[i] = randbits(64)
         elif isinstance(seed, list):
+            for i in range(4):
+                rawseed[i] = 0
             for i in range(len(seed)):
                 rawseed[i] = abs(seed[i])
         elif isinstance(seed, str):
