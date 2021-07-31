@@ -66,6 +66,7 @@ cdef class SHISHUA:
         cdef prng_state rng_state
         memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
         prng_gen(&rng_state, self._buffer, BUFSIZE)
+        memcpy(&self.rng_state, &rng_state, sizeof(prng_state))
         self._buf_index = 0
 
     def fill(self, buffer):
@@ -79,21 +80,16 @@ cdef class SHISHUA:
         buffer : bytearray
             Buffer that gets fully rewritten with random bytes.
         """
-        cdef prng_state rng_state
-        if len(buffer) & (128-1) == 0:
-            # The buffer is a multiple of 128:
-            # fast-path by bringing our own buffer.
-            memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
-            prng_gen(&rng_state, buffer, len(buffer))
-        else:
-            btc = len(buffer)  # Bytes to copy (what else could it mean?)
-            while btc > 0:
-                chunk_size = min(BUFSIZE - self._buf_index, btc)
-                buffer[0:chunk_size] = self._buffer[self._buf_index:self._buf_index+chunk_size]
-                self._buf_index += chunk_size
-                btc -= chunk_size
-                if self._buf_index >= BUFSIZE:
-                    self._fill_buffer()
+        bl = len(buffer)  # Bytes left to fill
+        bf = 0            # Bytes filled
+        while bl > 0:
+            chunk_size = min(BUFSIZE - self._buf_index, bl)
+            buffer[bf:bf+chunk_size] = self._buffer[self._buf_index:self._buf_index+chunk_size]
+            self._buf_index += chunk_size
+            bl -= chunk_size
+            bf += chunk_size
+            if self._buf_index >= BUFSIZE:
+                self._fill_buffer()
 
     def random_raw(self, size=1):
         """

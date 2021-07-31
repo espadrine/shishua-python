@@ -16,6 +16,27 @@ class SHISHUATest(unittest.TestCase):
         SHISHUA([-1, 12345678901234567890])
         SHISHUA("")
 
+    def test_fill(self):
+        tests = [{
+            'bytes': 1,
+            'vector': '95',
+        }, {
+            'bytes': 127,
+            'vector': '955d96f90fb4aa53092d82e63a7c09e22ca5a4a5a75a5a39dc68b4125de7ce2b6b6efef58bd9cc4212dd744e81fd18b958f0625d38efcc1b6fdb0da336f7e5ee6bdbe8ea5cda40c75344d0d5bfc1d507e02cf51208711bea8882cfd6ccf71d0662c75ef1985df2c6d56d3d2e35dad6853ac176b74db7e026512dce348ba603',
+        }, {
+            'bytes': 129,
+            'vector': '5d96f90fb4aa53092d82e63a7c09e22ca5a4a5a75a5a39dc68b4125de7ce2b6b6efef58bd9cc4212dd744e81fd18b958f0625d38efcc1b6fdb0da336f7e5ee6bdbe8ea5cda40c75344d0d5bfc1d507e02cf51208711bea8882cfd6ccf71d0662c75ef1985df2c6d56d3d2e35dad6853ac176b74db7e026512dce348ba603f10e',
+        }, {
+            'bytes': 254,
+            'vector': '03f10ea27a7fcb038c71e2c7057d8fef24945197a6dd608098f9f4cc275dd19751ad0f4bf61896c9c2842e34609e2916384e719f7f056c2a70f4b8592c02d1d6f091065dac7ec8a75e2825fd081e0dacbf1a32c22e8239606c41f1b13cd6b59e04c45afbfeb36700a9ef251cf572e1d74085dbcc0279491d7754962185687ae8',
+        }, {
+            'bytes': 131080,
+            'vector': '0a3d773959d14d6dbf9339be064fac059a071df7583f9b5922a1509951fb413d9b2e8aecd3de564d7b34aab14f1fe60e52f4bcad802332dbfa0b6f59d5205979e769d7b49207057f276407c464a4d42727e480494734d7013eda68f47fb8ffede7550af1a6410e0ba451dc12d70f948f0050ca2698a0291b11679d6a03a67f83',
+        }]
+        for t in tests:
+            self.assertEqual(SHISHUA([0, 0, 0, 0]).random_raw(t['bytes'])[-128:],
+                    binascii.unhexlify(t['vector'].encode('utf-8')))
+
     def test_vectors(self):
         vectors = [{
             'seed': 0,
