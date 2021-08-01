@@ -7,7 +7,7 @@ This [PyPI][] package provides bindings for Python.
 from shishua import SHISHUA
 rng = SHISHUA(0)
 buffer = rng.random_raw(1 << 30)  # 1 GiB
-# It takes 1s on my laptop.
+# It takes 1.5s on my laptop.
 ```
 
 ## API
