@@ -1,6 +1,7 @@
 import unittest
 import sys
 import binascii
+import numpy
 from shishua import SHISHUA
 
 class SHISHUATest(unittest.TestCase):
@@ -63,6 +64,11 @@ class SHISHUATest(unittest.TestCase):
         for v in vectors:
             self.assertEqual(SHISHUA(v['seed']).random_raw(256),
                     binascii.unhexlify(v['vector'].encode('utf-8')))
+
+    def test_numpy_compatibility(self):
+        r = numpy.random.Generator(SHISHUA(0))
+        buf = r.bytes(8)
+        self.assertEqual(buf, binascii.unhexlify('955d96f90fb4aa53'.encode('utf-8')))
 
 def testsuite():
     suite = unittest.TestSuite()

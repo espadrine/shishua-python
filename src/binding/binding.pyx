@@ -1,7 +1,9 @@
 import cython
-from libc.stdint cimport uint8_t, uint64_t
+from cpython.pycapsule cimport PyCapsule_New
+from libc.stdint cimport uint8_t, uint32_t, uint64_t
 from libc.stddef cimport size_t
 from libc.string cimport memcpy
+from threading import Lock
 from secrets import randbits
 from hashlib import sha256
 
@@ -13,8 +15,28 @@ cdef extern from "shishua.h":
         uint64_t output[16]
         uint64_t counter[4]
 
-    cdef prng_state prng_init(uint64_t seed[4])
-    cdef void prng_gen(prng_state *state, uint8_t *buf, size_t size)
+cdef extern from "buffered-shishua.h":
+    struct buffered_shishua_state:
+        prng_state state
+        uint8_t buffer[1 << 17]
+        size_t buf_index
+
+    cdef buffered_shishua_state *buffered_shishua_new(uint64_t seed[4])
+    cdef void buffered_shishua_delete(buffered_shishua_state *bss)
+    cdef void buffered_shishua_fill_buffer(buffered_shishua_state *bss)
+    cdef void buffered_shishua_fill(buffered_shishua_state *bss, uint8_t *buf, size_t size)
+
+    cdef uint64_t shishua_next_uint64(void *st)
+    cdef uint32_t shishua_next_uint32(void *st)
+    cdef double shishua_next_double(void *st)
+
+# BitGenerator for numpy compatibility.
+ctypedef struct bitgen_t:
+  void *state
+  uint64_t (*next_uint64)(void *st)
+  uint32_t (*next_uint32)(void *st)
+  double (*next_double)(void *st)
+  uint64_t (*next_raw)(void *st)
 
 DEF BUFSIZE = 1 << 17
 
@@ -32,9 +54,10 @@ cdef class SHISHUA:
         A seed to initialize the PRNG. If None, then fresh,
         unpredictable entropy will be pulled from the OS.
     """
-    cdef prng_state rng_state
-    cdef uint8_t[BUFSIZE] _buffer
-    cdef uint64_t _buf_index
+    cdef buffered_shishua_state *rng_state
+    cdef bitgen_t _bitgen
+    cdef readonly object lock
+    cdef readonly object capsule
 
     def __init__(self, seed=None):
         cdef uint64_t rawseed[4]
@@ -59,15 +82,18 @@ cdef class SHISHUA:
             rawseed[1] = rawseed[2] = rawseed[3] = 0
         else:
             raise ValueError("Invalid type for SHISHUA seed")
-        self.rng_state = prng_init(rawseed)
-        self._fill_buffer()
+        # TODO: free the memory.
+        self.rng_state = buffered_shishua_new(rawseed)
 
-    def _fill_buffer(self):
-        cdef prng_state rng_state
-        memcpy(&rng_state, &self.rng_state, sizeof(prng_state))
-        prng_gen(&rng_state, self._buffer, BUFSIZE)
-        memcpy(&self.rng_state, &rng_state, sizeof(prng_state))
-        self._buf_index = 0
+        # Compatibility with numpy's BitGenerator.
+        self.lock = Lock()
+        self._bitgen.state = <void *>self.rng_state
+        self._bitgen.next_uint64 = &shishua_next_uint64
+        self._bitgen.next_uint32 = &shishua_next_uint32
+        self._bitgen.next_double = &shishua_next_double
+        self._bitgen.next_raw = &shishua_next_uint64
+        cdef const char *name = "BitGenerator"
+        self.capsule = PyCapsule_New(<void *>&self._bitgen, name, NULL)
 
     def fill(self, buffer):
         """
@@ -80,16 +106,7 @@ cdef class SHISHUA:
         buffer : bytearray
             Buffer that gets fully rewritten with random bytes.
         """
-        bl = len(buffer)  # Bytes left to fill
-        bf = 0            # Bytes filled
-        while bl > 0:
-            chunk_size = min(BUFSIZE - self._buf_index, bl)
-            buffer[bf:bf+chunk_size] = self._buffer[self._buf_index:self._buf_index+chunk_size]
-            self._buf_index += chunk_size
-            bl -= chunk_size
-            bf += chunk_size
-            if self._buf_index >= BUFSIZE:
-                self._fill_buffer()
+        buffered_shishua_fill(self.rng_state, buffer, len(buffer))
 
     def random_raw(self, size=1):
         """

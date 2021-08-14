@@ -10,6 +10,15 @@ buffer = rng.random_raw(1 << 30)  # 1 GiB
 # It takes 1.5s on my laptop.
 ```
 
+NumPy support:
+
+```python
+import numpy
+from shishua import SHISHUA
+buffer = numpy.random.Generator(SHISHUA()).bytes(1024)
+print(buffer.hex())
+```
+
 ## API
 
 ### `SHISHUA(seed=None)`
