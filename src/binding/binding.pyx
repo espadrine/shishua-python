@@ -82,7 +82,6 @@ cdef class SHISHUA:
             rawseed[1] = rawseed[2] = rawseed[3] = 0
         else:
             raise ValueError("Invalid type for SHISHUA seed")
-        # TODO: free the memory.
         self.rng_state = buffered_shishua_new(rawseed)
 
         # Compatibility with numpy's BitGenerator.
@@ -127,3 +126,6 @@ cdef class SHISHUA:
         buf = bytearray(size)
         self.fill(buf)
         return bytes(buf)
+
+    def __dealloc__(self):
+        buffered_shishua_delete(self.rng_state)
